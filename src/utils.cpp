@@ -7,9 +7,6 @@
 time_t cvt_date(char const *date, char const *time);
 
 BufferedSerial *ser;
-#ifdef FEATURE_USBSERIAL
-USBSerialBuffered *usb;
-#endif
 bool _useDprintf;
 
 /*
@@ -29,39 +26,14 @@ void InitSerial(int timeout, DigitalOut *led)
 {
     _useDprintf = true;
     bool uartActive;
-    {
-        {
-            // need to turn rx low to avoid floating signal
-            DigitalOut rx(USBRX);
-            rx = 0;
-        }
-        DigitalIn uartRX(USBRX);
-        uartActive = uartRX.read();
-    }
-#ifdef FEATURE_USBSERIAL
-    if (!uartActive) {
-        usb = new USBSerialBuffered();
-        Timer t;
-        t.start();
-        while(!usb->connected()) {
-            if (led)
-                *led = !*led;
-            wait_ms(100);
-            if (timeout) {
-                if (t.read_ms() >= timeout)
-                    return;
-            }
-        }
-        busyTimerFunc();
-        return;
-    } else {
-#else
-    {
-#endif
-        ser = new BufferedSerial(USBTX, USBRX);
-        ser->baud(230400);
-        ser->format(8);
-    }
+        // need to turn rx low to avoid floating signal
+        DigitalOut rx(USBRX);
+        rx = 0;
+    DigitalIn uartRX(USBRX);
+    uartActive = uartRX.read();
+    ser = new BufferedSerial(USBTX, USBRX);
+    ser->baud(230400);
+    ser->format(8);
     time_t t = cvt_date(__DATE__, __TIME__);
     if (t > time(NULL)) {
         set_time(t);
@@ -115,15 +87,8 @@ void VAprintf(bool timstamp, bool newline, bool printEnabled, const char *format
 
     if (timstamp)
         printTimeStamp();
-#ifdef FEATURE_USBSERIAL
-    if (usb) {
-        usb->vprintf_irqsafe(format, arg);
-        if (newline)
-            usb->printf_irqsafe("\r\n");
-#else
-    if (0) {
-#endif
-    } else if (ser) {
+
+    if (ser) {
         // serial jas 
         int r = 0;
         r = vsnprintf(NULL, 0, format, arg);

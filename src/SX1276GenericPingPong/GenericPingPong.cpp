@@ -16,13 +16,8 @@
 /* Set this flag to '1' to display debug messages on the console */
 #define DEBUG_MESSAGE   1
 
-/* Set this flag to '1' to use the LoRa modulation or to '0' to use FSK modulation */
-#define USE_MODEM_LORA  1
-#define USE_MODEM_FSK   !USE_MODEM_LORA
 #define RF_FREQUENCY            RF_FREQUENCY_868_1  // Hz
 #define TX_OUTPUT_POWER         14                  // 14 dBm
-
-#if USE_MODEM_LORA == 1
 
 #define LORA_BANDWIDTH          125000  // LoRa default, details in SX1276::BandwidthMap
 #define LORA_SPREADING_FACTOR   LORA_SF7
@@ -35,20 +30,6 @@
 #define LORA_NB_SYMB_HOP        4     
 #define LORA_IQ_INVERSION_ON    false
 #define LORA_CRC_ENABLED        true
-    
-#elif USE_MODEM_FSK == 1
-
-#define FSK_FDEV                25000     // Hz
-#define FSK_DATARATE            19200     // bps
-#define FSK_BANDWIDTH           50000     // Hz
-#define FSK_AFC_BANDWIDTH       83333     // Hz
-#define FSK_PREAMBLE_LENGTH     5         // Same for Tx and Rx
-#define FSK_FIX_LENGTH_PAYLOAD_ON   false
-#define FSK_CRC_ENABLED         true
-    
-#else
-    #error "Please define a modem in the compiler options."
-#endif 
 
 
 #define RX_TIMEOUT_VALUE    3500	// in ms
@@ -134,13 +115,8 @@ int SX1276PingPong()
     dprintf("SX1276 Ping Pong Demo Application" );
     dprintf("Freqency: %.1f", (double)RF_FREQUENCY/1000000.0);
     dprintf("TXPower: %d dBm",  TX_OUTPUT_POWER);
-#if USE_MODEM_LORA == 1
     dprintf("Bandwidth: %d Hz", LORA_BANDWIDTH);
     dprintf("Spreading factor: SF%d", LORA_SPREADING_FACTOR);
-#elif USE_MODEM_FSK == 1
-    dprintf("Bandwidth: %d kHz",  FSK_BANDWIDTH);
-    dprintf("Baudrate: %d", FSK_DATARATE);
-#endif
     // Initialize Radio driver
     RadioEvents.TxDone = OnTxDone;
     RadioEvents.RxDone = OnRxDone;
@@ -178,41 +154,22 @@ int SX1276PingPong()
 
     Radio->SetChannel(RF_FREQUENCY ); 
 
-#if USE_MODEM_LORA == 1
-    
-    if (LORA_FHSS_ENABLED)
-        dprintf("             > LORA FHSS Mode <");
-    if (!LORA_FHSS_ENABLED)
-        dprintf("             > LORA Mode <");
+if (LORA_FHSS_ENABLED)
+    dprintf("             > LORA FHSS Mode <");
+if (!LORA_FHSS_ENABLED)
+    dprintf("             > LORA Mode <");
 
-    Radio->SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-                         LORA_SPREADING_FACTOR, LORA_CODINGRATE,
-                         LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-                         LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                         LORA_IQ_INVERSION_ON, 2000 );
-    
-    Radio->SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-                         LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
-                         LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON, 0,
-                         LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                         LORA_IQ_INVERSION_ON, true );
-                         
-#elif USE_MODEM_FSK == 1
+Radio->SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
+                        LORA_SPREADING_FACTOR, LORA_CODINGRATE,
+                        LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
+                        LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
+                        LORA_IQ_INVERSION_ON, 2000 );
 
-    dprintf("              > FSK Mode <");
-    Radio->SetTxConfig( MODEM_FSK, TX_OUTPUT_POWER, FSK_FDEV, 0,
-                         FSK_DATARATE, 0,
-                         FSK_PREAMBLE_LENGTH, FSK_FIX_LENGTH_PAYLOAD_ON,
-                         FSK_CRC_ENABLED, 0, 0, 0, 2000 );
-    
-    Radio->SetRxConfig( MODEM_FSK, FSK_BANDWIDTH, FSK_DATARATE,
-                         0, FSK_AFC_BANDWIDTH, FSK_PREAMBLE_LENGTH,
-                         0, FSK_FIX_LENGTH_PAYLOAD_ON, 0, FSK_CRC_ENABLED,
-                         0, 0, false, true );
-                         
-#else
-
-#error "Please define a modem in the compiler options."
+Radio->SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
+                        LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
+                        LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON, 0,
+                        LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
+                        LORA_IQ_INVERSION_ON, true );
 
 #endif
      
@@ -224,10 +181,6 @@ int SX1276PingPong()
     
     while( 1 )
     {
-#ifdef TARGET_STM32L4
-    //     WatchDogUpdate();
-#endif
-        
         switch( State )
         {
         case RX:
@@ -415,5 +368,3 @@ void OnRxError(void *radio, void *userThisPtr, void *userData)
     if (DEBUG_MESSAGE)
         dprintf("> OnRxError");
 }
-
-#endif

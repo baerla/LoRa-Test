@@ -15,7 +15,6 @@
 #elif TARGET_STM32L432KC
  #define HELTEC_STM32L4
  #define FEATURE_LORA
- #define FEATURE_USBSERIAL
 #endif
 
 
