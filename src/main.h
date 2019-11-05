@@ -7,16 +7,9 @@
 #include "mbed.h"
 #include "PinMap2.h"
 #include "BufferedSerial.h"
-#ifdef FEATURE_USBSERIAL
-#include "USBSerialBuffered/USBSerialBuffered.h"
-#endif
 #include "SX1276GenericPingPong/GenericPingPong.h"
 
-
 extern BufferedSerial *ser;
-#ifdef FEATURE_USBSERIAL
-extern USBSerialBuffered *usb;
-#endif
 extern bool _useDprintf;
 extern void InitSerial(int timeout, DigitalOut *led);  
 extern void dump(const char *title, const void *data, int len, bool dwords = false);
