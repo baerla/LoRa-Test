@@ -7,7 +7,7 @@
 #include "mbed.h"
 #include "PinMap2.h"
 #include "BufferedSerial.h"
-#include "SX1276GenericPingPong/GenericPingPong.h"
+#include "LoRa.h"
 
 extern BufferedSerial *ser;
 extern bool _useDprintf;

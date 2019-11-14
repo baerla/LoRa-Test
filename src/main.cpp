@@ -21,5 +21,5 @@ int main() {
   
     dprintf("Starting a simple LoRa PingPong");
 
-    SX1276PingPong();
+    LoRa();
 }
