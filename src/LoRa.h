@@ -31,9 +31,12 @@
 //#define BUFFER_SIZE       32        // Define the payload size here
 #define BUFFER_SIZE         64        // Define the payload size here
 
+Serial pcSerial(USBTX, USBRX);
+
+
 /*
- *  Global variables declarations
- */
+*  Global variables declarations
+*/
 typedef enum
 {
     LOWPOWER = 0,
@@ -53,22 +56,120 @@ typedef enum
 volatile AppStates_t State = LOWPOWER;
 
 /*!
- * Radio events function pointer
- */
+* Radio events function pointer
+*/
 static RadioEvents_t RadioEvents;
 
 /*
- *  Global variables declarations
- */
+*  Global variables declarations
+*/
 SX1276Generic *Radio;
 
 //Todo: erase this PingMsg
-const uint8_t PingMsg[] = { 0xff, 0xff, 0x00, 0x00, 'P', 'I', 'N', 'G'};// "PING";
+//const uint8_t PingMsg[] = { 0xff, 0xff, 0x00, 0x00, 'P', 'I', 'N', 'G'};// "PING";
 
 uint16_t BufferSize = BUFFER_SIZE;
 uint8_t *Buffer;
 
 DigitalOut *led3;
+
+void OnTxDone(void *radio, void *userThisPtr, void *userData);
+void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
+void OnTxTimeout(void *radio, void *userThisPtr, void *userData);
+void OnRxTimeout(void *radio, void *userThisPtr, void *userData);
+void OnRxError(void *radio, void *userThisPtr, void *userData);
+
+
+class LoRa {
+private:
+
+public:
+    LoRa(){}
+
+    int LoRaSend()
+    {
+        DigitalOut *led = new DigitalOut(LED4);   // RX red
+        led3 = new DigitalOut(LED3);  // TX blue
+        
+        Buffer = new  uint8_t[BUFFER_SIZE];
+        *led3 = 1;
+
+        Radio = new SX1276Generic(NULL, RFM95_SX1276,
+                LORA_SPI_MOSI, LORA_SPI_MISO, LORA_SPI_SCLK, LORA_CS, LORA_RESET,
+                LORA_DIO0, LORA_DIO1, LORA_DIO2, LORA_DIO3, LORA_DIO4, LORA_DIO5);
+        
+        uint8_t i;
+
+        #ifdef MASTER
+            bool isMaster = true;   //dependend on device
+        #else
+            bool isMaster = false;
+        #endif
+
+        // Initialize Radio driver
+        RadioEvents.TxDone = OnTxDone;
+        RadioEvents.RxDone = OnRxDone;
+        RadioEvents.RxError = OnRxError;
+        RadioEvents.TxTimeout = OnTxTimeout;
+        RadioEvents.RxTimeout = OnRxTimeout;    
+        if (Radio->Init( &RadioEvents ) == false) {
+            if (DEBUG_MESSAGE) {
+                while(1) {
+                    pcSerial.printf("Radio could not be detected!");
+                    wait_us( 1000000 ); // 1s
+                }
+            }
+        }
+
+        Radio->SetChannel(RF_FREQUENCY);
+
+        Radio->SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
+                            LORA_SPREADING_FACTOR, LORA_CODINGRATE,
+                            LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
+                            LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
+                            LORA_IQ_INVERSION_ON, 2000 );
+
+        Radio->SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
+                            LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
+                            LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON, 0,
+                            LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
+                            LORA_IQ_INVERSION_ON, true );
+
+
+        Radio->Rx( RX_TIMEOUT_VALUE );
+        
+        while( 1 )
+        {
+            switch( State )
+            {
+            case RX:
+                pcSerial.printf("RX");
+                *led3 = 0;
+                if( BufferSize > 0 )
+                {
+                    *led = !*led;
+                    // Send the next frame            
+                    /*memcpy(Buffer, PingMsg, sizeof(PingMsg));     TODO: send
+                    // We fill the buffer with numbers for the payload 
+                    for( i = sizeof(PingMsg); i < BufferSize; i++ )
+                    {
+                        Buffer[i] = i - sizeof(PingMsg);
+                    }*/
+                    wait_us( 10000 );   // 10ms
+                    Radio->Send( Buffer, BufferSize );
+                }
+                State = LOWPOWER;
+                break;
+            case LOWPOWER:
+                sleep();
+                break;
+            default:
+                State = LOWPOWER;
+                break;
+            }    
+        }
+    }
+};
 
 
 void OnTxDone(void *radio, void *userThisPtr, void *userData)
@@ -76,7 +177,7 @@ void OnTxDone(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX;
     if (DEBUG_MESSAGE)
-        printf("> OnTxDone");
+        pcSerial.printf("> OnTxDone");
 }
 
 void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
@@ -86,7 +187,7 @@ void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, 
     memcpy( Buffer, payload, BufferSize );
     State = RX;
     if (DEBUG_MESSAGE)
-        printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d", rssi, snr);
+        pcSerial.printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d", rssi, snr);
 }
 
 void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -95,7 +196,7 @@ void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX_TIMEOUT;
     if(DEBUG_MESSAGE)
-        printf("> OnTxTimeout");
+        pcSerial.printf("> OnTxTimeout");
 }
 
 void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -105,7 +206,7 @@ void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
     Buffer[BufferSize-1] = 0;
     State = RX_TIMEOUT;
     if (DEBUG_MESSAGE)
-        printf("> OnRxTimeout");
+        pcSerial.printf("> OnRxTimeout");
 }
 
 void OnRxError(void *radio, void *userThisPtr, void *userData)
@@ -113,91 +214,7 @@ void OnRxError(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = RX_ERROR;
     if (DEBUG_MESSAGE)
-        printf("> OnRxError");
-}
-
-int LoRa()
-{
-    DigitalOut *led = new DigitalOut(LED4);   // RX red
-    led3 = new DigitalOut(LED3);  // TX blue
-    
-    Buffer = new  uint8_t[BUFFER_SIZE];
-    *led3 = 1;
-
-    Radio = new SX1276Generic(NULL, RFM95_SX1276,
-			LORA_SPI_MOSI, LORA_SPI_MISO, LORA_SPI_SCLK, LORA_CS, LORA_RESET,
-            LORA_DIO0, LORA_DIO1, LORA_DIO2, LORA_DIO3, LORA_DIO4, LORA_DIO5);
-    
-    uint8_t i;
-
-    #ifdef MASTER
-        bool isMaster = true;   //dependend on device
-    #else
-        bool isMaster = false;
-    #endif
-
-    // Initialize Radio driver
-    RadioEvents.TxDone = OnTxDone;
-    RadioEvents.RxDone = OnRxDone;
-    RadioEvents.RxError = OnRxError;
-    RadioEvents.TxTimeout = OnTxTimeout;
-    RadioEvents.RxTimeout = OnRxTimeout;    
-    if (Radio->Init( &RadioEvents ) == false) {
-        if (DEBUG_MESSAGE) {
-            while(1) {
-                printf("Radio could not be detected!");
-                wait_us( 1000000 ); // 1s
-            }
-        }
-    }
-
-    Radio->SetChannel(RF_FREQUENCY);
-
-    Radio->SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-                        LORA_SPREADING_FACTOR, LORA_CODINGRATE,
-                        LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-                        LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                        LORA_IQ_INVERSION_ON, 2000 );
-
-    Radio->SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-                        LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
-                        LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON, 0,
-                        LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                        LORA_IQ_INVERSION_ON, true );
-
-
-    Radio->Rx( RX_TIMEOUT_VALUE );
-    
-    while( 1 )
-    {
-        switch( State )
-        {
-        case RX:
-        	*led3 = 0;
-            if( BufferSize > 0 )
-            {
-                *led = !*led;
-                // Send the next frame            
-                memcpy(Buffer, PingMsg, sizeof(PingMsg));
-                // We fill the buffer with numbers for the payload 
-                for( i = sizeof(PingMsg); i < BufferSize; i++ )
-                {
-                    Buffer[i] = i - sizeof(PingMsg);
-                }
-                wait_us( 10000 );   // 10ms
-                Radio->Send( Buffer, BufferSize );
-            }
-            State = LOWPOWER;
-            break;
-        case LOWPOWER:
-        	sleep();
-            break;
-        default:
-            State = LOWPOWER;
-            break;
-        }    
-    }
-
+        pcSerial.printf("> OnRxError");
 }
 
 #endif
