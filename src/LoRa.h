@@ -65,8 +65,7 @@ static RadioEvents_t RadioEvents;
 */
 SX1276Generic *Radio;
 
-//Todo: erase this PingMsg
-//const uint8_t PingMsg[] = { 0xff, 0xff, 0x00, 0x00, 'P', 'I', 'N', 'G'};// "PING";
+uint8_t Message[] = {'T', 'E', 'S', 'T'}; //TODO: fill with some content
 
 uint16_t BufferSize = BUFFER_SIZE;
 uint8_t *Buffer;
@@ -100,12 +99,6 @@ public:
         
         uint8_t i;
 
-        #ifdef MASTER
-            bool isMaster = true;   //dependend on device
-        #else
-            bool isMaster = false;
-        #endif
-
         // Initialize Radio driver
         RadioEvents.TxDone = OnTxDone;
         RadioEvents.RxDone = OnRxDone;
@@ -136,29 +129,44 @@ public:
                             LORA_IQ_INVERSION_ON, true );
 
 
-        Radio->Rx( RX_TIMEOUT_VALUE );
+        //Radio->Rx( RX_TIMEOUT_VALUE );
+        State = RX;
         
         while( 1 )
         {
             switch( State )
             {
-            case RX:
+            case RX:    // reading happend
                 pcSerial.printf("RX");
                 *led3 = 0;
                 if( BufferSize > 0 )
                 {
-                    *led = !*led;
-                    // Send the next frame            
-                    /*memcpy(Buffer, PingMsg, sizeof(PingMsg));     TODO: send
+                    *led = !*led;         
+                    memcpy(Buffer, Message, sizeof(Message));
                     // We fill the buffer with numbers for the payload 
-                    for( i = sizeof(PingMsg); i < BufferSize; i++ )
+                    for( i = sizeof(Message); i < BufferSize; i++ )
                     {
-                        Buffer[i] = i - sizeof(PingMsg);
-                    }*/
+                        Buffer[i] = i - sizeof(Message);
+                    }
                     wait_us( 10000 );   // 10ms
                     Radio->Send( Buffer, BufferSize );
                 }
                 State = LOWPOWER;
+                break;
+            case TX:    // sending happend
+                *led3 = 1;
+                Radio->Rx( RX_TIMEOUT_VALUE );
+                State = LOWPOWER;
+                break;
+            case RX_TIMEOUT:
+                State = RX;
+                break;
+            case RX_ERROR:  // reading error
+                *led = !*led;
+                State = RX;
+                break;
+            case TX_TIMEOUT:
+                State = RX;
                 break;
             case LOWPOWER:
                 sleep();
@@ -177,7 +185,7 @@ void OnTxDone(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnTxDone");
+        pcSerial.printf("> OnTxDone\n");
 }
 
 void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
@@ -187,7 +195,7 @@ void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, 
     memcpy( Buffer, payload, BufferSize );
     State = RX;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d", rssi, snr);
+        pcSerial.printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d \n", rssi, snr);
 }
 
 void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -196,7 +204,7 @@ void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX_TIMEOUT;
     if(DEBUG_MESSAGE)
-        pcSerial.printf("> OnTxTimeout");
+        pcSerial.printf("> OnTxTimeout\n");
 }
 
 void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -206,7 +214,7 @@ void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
     Buffer[BufferSize-1] = 0;
     State = RX_TIMEOUT;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxTimeout");
+        pcSerial.printf("> OnRxTimeout\n");
 }
 
 void OnRxError(void *radio, void *userThisPtr, void *userData)
@@ -214,7 +222,7 @@ void OnRxError(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = RX_ERROR;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxError");
+        pcSerial.printf("> OnRxError\n");
 }
 
 #endif
