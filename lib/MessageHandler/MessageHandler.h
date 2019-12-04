@@ -1,7 +1,3 @@
-/*
- * @author Patrick Bär
- * @date 22.10.19
- */
 
 #include "mbed.h"
 #include "sx1276-mbed-hal.h"
