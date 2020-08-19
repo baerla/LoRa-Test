@@ -68,7 +68,8 @@ SX1276Generic *Radio;
 uint8_t Message[] = {'T', 'E', 'S', 'T'}; //TODO: fill with some content
 
 uint16_t BufferSize = BUFFER_SIZE;
-uint8_t *Buffer;
+uint8_t *TxBuffer;
+uint8_t *RxBuffer;
 
 DigitalOut *led3;
 
@@ -90,7 +91,8 @@ public:
         DigitalOut *led = new DigitalOut(LED4);   // RX red
         led3 = new DigitalOut(LED3);  // TX blue
         
-        Buffer = new  uint8_t[BUFFER_SIZE];
+        TxBuffer = new  uint8_t[BUFFER_SIZE];
+        RxBuffer = new  uint8_t[BUFFER_SIZE];
         *led3 = 1;
 
         Radio = new SX1276Generic(NULL, RFM95_SX1276,
@@ -137,19 +139,18 @@ public:
             switch( State )
             {
             case RX:    // reading happend
-                pcSerial.printf("RX");
                 *led3 = 0;
                 if( BufferSize > 0 )
                 {
                     *led = !*led;         
-                    memcpy(Buffer, Message, sizeof(Message));
+                    memcpy(TxBuffer, Message, sizeof(Message));
                     // We fill the buffer with numbers for the payload 
                     for( i = sizeof(Message); i < BufferSize; i++ )
                     {
-                        Buffer[i] = i - sizeof(Message);
+                        TxBuffer[i] = i - sizeof(Message);
                     }
                     wait_us( 10000 );   // 10ms
-                    Radio->Send( Buffer, BufferSize );
+                    Radio->Send( TxBuffer, BufferSize );
                 }
                 State = LOWPOWER;
                 break;
@@ -192,10 +193,11 @@ void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, 
 {
     Radio->Sleep( );
     BufferSize = size;
-    memcpy( Buffer, payload, BufferSize );
+    memcpy( RxBuffer, payload, BufferSize );
     State = RX;
     if (DEBUG_MESSAGE)
         pcSerial.printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d \n", rssi, snr);
+    pcSerial.printf("%s\n\n", payload);
 }
 
 void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -211,7 +213,7 @@ void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
 {
     *led3 = 0;
     Radio->Sleep( );
-    Buffer[BufferSize-1] = 0;
+    RxBuffer[BufferSize-1] = 0;
     State = RX_TIMEOUT;
     if (DEBUG_MESSAGE)
         pcSerial.printf("> OnRxTimeout\n");
