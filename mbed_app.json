@@ -1,2 +1,7 @@
 {
+  "target_overrides": {
+    "*": {
+      "target.components_add": ["SX1276"]
+    }
+  }
 }

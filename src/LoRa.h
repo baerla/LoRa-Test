@@ -31,9 +31,6 @@
 //#define BUFFER_SIZE       32        // Define the payload size here
 #define BUFFER_SIZE         64        // Define the payload size here
 
-Serial pcSerial(USBTX, USBRX);
-
-
 /*
 *  Global variables declarations
 */
@@ -110,7 +107,7 @@ public:
         if (Radio->Init( &RadioEvents ) == false) {
             if (DEBUG_MESSAGE) {
                 while(1) {
-                    pcSerial.printf("Radio could not be detected!");
+                    printf("Radio could not be detected!");
                     wait_us( 1000000 ); // 1s
                 }
             }
@@ -186,7 +183,7 @@ void OnTxDone(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnTxDone\n");
+        printf("> OnTxDone\n");
 }
 
 void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
@@ -196,8 +193,8 @@ void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, 
     memcpy( RxBuffer, payload, BufferSize );
     State = RX;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d \n", rssi, snr);
-    pcSerial.printf("%s\n\n", payload);
+        printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d \n", rssi, snr);
+    printf("%s\n\n", payload);
 }
 
 void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -206,7 +203,7 @@ void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = TX_TIMEOUT;
     if(DEBUG_MESSAGE)
-        pcSerial.printf("> OnTxTimeout\n");
+        printf("> OnTxTimeout\n");
 }
 
 void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
@@ -216,7 +213,7 @@ void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
     RxBuffer[BufferSize-1] = 0;
     State = RX_TIMEOUT;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxTimeout\n");
+        printf("> OnRxTimeout\n");
 }
 
 void OnRxError(void *radio, void *userThisPtr, void *userData)
@@ -224,7 +221,7 @@ void OnRxError(void *radio, void *userThisPtr, void *userData)
     Radio->Sleep( );
     State = RX_ERROR;
     if (DEBUG_MESSAGE)
-        pcSerial.printf("> OnRxError\n");
+        printf("> OnRxError\n");
 }
 
 #endif

@@ -3,9 +3,7 @@
 #include "LoRa.h"
 
 int main() { 
-    Serial pcSerial(USBTX, USBRX);
-
-    pcSerial.printf("Starting LoRa\n");
+    printf("Starting LoRa\n");
 
     LoRa loRa = LoRa();
     loRa.LoRaSend();
