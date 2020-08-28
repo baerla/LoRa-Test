@@ -1,4 +1,11 @@
 {
+  "config": {
+    "lora-radio": {
+      "value": "SX1276"
+    },
+    "components": ["SX1276"]
+  },
+  
   "target_overrides": {
     "*": {
       "target.components_add": ["SX1276"]

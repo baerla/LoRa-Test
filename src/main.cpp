@@ -1,10 +1,12 @@
 #include "mbed.h"
-#include "PinMap2.h"
 #include "LoRa.h"
 
-int main() { 
-    printf("Starting LoRa\n");
+ChannelLoRa<SX1276Generic> loraInstance;
 
-    LoRa loRa = LoRa();
-    loRa.LoRaSend();
+int main()
+{
+    printf("Starting LoRa\n");
+    loraInstance.setup();
+
+    return 0;
 }

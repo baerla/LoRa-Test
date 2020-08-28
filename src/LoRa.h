@@ -1,228 +1,91 @@
-#ifndef __LoRa
-#define __LoRa
+#ifndef __LoRa_H
+#define __LoRa_H
 
 #include "mbed.h"
-#include "PinMap2.h"
 #include "sx1276-mbed-hal.h"
+#include "rtos/ThisThread.h"
+#include "PinMap2.h"
 
-#ifdef FEATURE_LORA
+uint32_t RX_TIMEOUT = 100;
 
-/* Set this flag to '1' to display debug messages on the console */
-#define DEBUG_MESSAGE   1
-
-#define RF_FREQUENCY            RF_FREQUENCY_868_1  // Hz
-#define TX_OUTPUT_POWER         14                  // 14 dBm
-
-#define LORA_BANDWIDTH          125000  // LoRa default, details in SX1276::BandwidthMap
-#define LORA_SPREADING_FACTOR   LORA_SF7
-#define LORA_CODINGRATE         LORA_ERROR_CODING_RATE_4_5
-
-#define LORA_PREAMBLE_LENGTH    8       // Same for Tx and Rx
-#define LORA_SYMBOL_TIMEOUT     5       // Symbols
-#define LORA_FIX_LENGTH_PAYLOAD_ON  false
-#define LORA_FHSS_ENABLED       false  
-#define LORA_NB_SYMB_HOP        4     
-#define LORA_IQ_INVERSION_ON    false
-#define LORA_CRC_ENABLED        true
-
-
-#define RX_TIMEOUT_VALUE    3500	// in ms
-
-//#define BUFFER_SIZE       32        // Define the payload size here
-#define BUFFER_SIZE         64        // Define the payload size here
-
-/*
-*  Global variables declarations
-*/
-typedef enum
+enum event_t
 {
-    LOWPOWER = 0,
-    IDLE,
-    
-    RX,
-    RX_TIMEOUT,
-    RX_ERROR,
-    
-    TX,
-    TX_TIMEOUT,
-    
-    CAD,
-    CAD_DONE
-} AppStates_t;
+    EV_NONE,
+    EV_TX_DONE,
+    EV_TX_TIMEOUT,
+    EV_RX_DONE,
+    EV_RX_TIMEOUT,
+    EV_RX_ERROR,
+};
+static volatile event_t received_event;
 
-volatile AppStates_t State = LOWPOWER;
+static void tx_done(void *radio, void *userThisPtr, void *userData)
+{
+    received_event = EV_TX_DONE;
+}
 
-/*!
-* Radio events function pointer
-*/
-static RadioEvents_t RadioEvents;
+static void tx_timeout(void *radio, void *userThisPtr, void *userData)
+{
+    received_event = EV_TX_TIMEOUT;
+}
 
-/*
-*  Global variables declarations
-*/
-SX1276Generic *Radio;
+static void rx_done(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
+{
+    received_event = EV_RX_DONE;
+}
 
-uint8_t Message[] = {'T', 'E', 'S', 'T'}; //TODO: fill with some content
+static void rx_timeout(void *radio, void *userThisPtr, void *userData)
+{
+    received_event = EV_RX_TIMEOUT;
+}
 
-uint16_t BufferSize = BUFFER_SIZE;
-uint8_t *TxBuffer;
-uint8_t *RxBuffer;
+static void rx_error(void *radio, void *userThisPtr, void *userData)
+{
+    received_event = EV_RX_ERROR;
+}
 
-DigitalOut *led3;
-
-void OnTxDone(void *radio, void *userThisPtr, void *userData);
-void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
-void OnTxTimeout(void *radio, void *userThisPtr, void *userData);
-void OnRxTimeout(void *radio, void *userThisPtr, void *userData);
-void OnRxError(void *radio, void *userThisPtr, void *userData);
-
-
-class LoRa {
-private:
-
+    template <class RadioClass>
+    class ChannelLoRa
+{
 public:
-    LoRa(){}
+    ChannelLoRa() : radio(&radio_callbacks, SX1276MB1MAS,
+                          LORA_SPI_MOSI, LORA_SPI_MISO, LORA_SPI_SCLK, LORA_CS, LORA_RESET,
+                          LORA_DIO0, LORA_DIO1, LORA_DIO2, LORA_DIO3, LORA_DIO4, LORA_DIO5,
+                          LORA_ANT_RX, LORA_ANT_TX, LORA_ANT_BOOST, LORA_TCXO) {}
 
-    int LoRaSend()
+    void set_tx_config()
     {
-        DigitalOut *led = new DigitalOut(LED4);   // RX red
-        led3 = new DigitalOut(LED3);  // TX blue
-        
-        TxBuffer = new  uint8_t[BUFFER_SIZE];
-        RxBuffer = new  uint8_t[BUFFER_SIZE];
-        *led3 = 1;
+        uint8_t buffer[] = {0};
 
-        Radio = new SX1276Generic(NULL, RFM95_SX1276,
-                LORA_SPI_MOSI, LORA_SPI_MISO, LORA_SPI_SCLK, LORA_CS, LORA_RESET,
-                LORA_DIO0, LORA_DIO1, LORA_DIO2, LORA_DIO3, LORA_DIO4, LORA_DIO5);
-        
-        uint8_t i;
+        radio.SetTxConfig(MODEM_LORA, 13, 0, 0, 7, 1, 8, false, true, false, 0, false, 100);
+        radio.Send(buffer, sizeof(buffer));
 
-        // Initialize Radio driver
-        RadioEvents.TxDone = OnTxDone;
-        RadioEvents.RxDone = OnRxDone;
-        RadioEvents.RxError = OnRxError;
-        RadioEvents.TxTimeout = OnTxTimeout;
-        RadioEvents.RxTimeout = OnRxTimeout;    
-        if (Radio->Init( &RadioEvents ) == false) {
-            if (DEBUG_MESSAGE) {
-                while(1) {
-                    printf("Radio could not be detected!");
-                    wait_us( 1000000 ); // 1s
-                }
-            }
-        }
-
-        Radio->SetChannel(RF_FREQUENCY);
-
-        Radio->SetTxConfig( MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-                            LORA_SPREADING_FACTOR, LORA_CODINGRATE,
-                            LORA_PREAMBLE_LENGTH, LORA_FIX_LENGTH_PAYLOAD_ON,
-                            LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                            LORA_IQ_INVERSION_ON, 2000 );
-
-        Radio->SetRxConfig( MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-                            LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
-                            LORA_SYMBOL_TIMEOUT, LORA_FIX_LENGTH_PAYLOAD_ON, 0,
-                            LORA_CRC_ENABLED, LORA_FHSS_ENABLED, LORA_NB_SYMB_HOP, 
-                            LORA_IQ_INVERSION_ON, true );
-
-
-        //Radio->Rx( RX_TIMEOUT_VALUE );
-        State = RX;
-        
-        while( 1 )
-        {
-            switch( State )
-            {
-            case RX:    // reading happend
-                *led3 = 0;
-                if( BufferSize > 0 )
-                {
-                    *led = !*led;         
-                    memcpy(TxBuffer, Message, sizeof(Message));
-                    // We fill the buffer with numbers for the payload 
-                    for( i = sizeof(Message); i < BufferSize; i++ )
-                    {
-                        TxBuffer[i] = i - sizeof(Message);
-                    }
-                    wait_us( 10000 );   // 10ms
-                    Radio->Send( TxBuffer, BufferSize );
-                }
-                State = LOWPOWER;
-                break;
-            case TX:    // sending happend
-                *led3 = 1;
-                Radio->Rx( RX_TIMEOUT_VALUE );
-                State = LOWPOWER;
-                break;
-            case RX_TIMEOUT:
-                State = RX;
-                break;
-            case RX_ERROR:  // reading error
-                *led = !*led;
-                State = RX;
-                break;
-            case TX_TIMEOUT:
-                State = RX;
-                break;
-            case LOWPOWER:
-                sleep();
-                break;
-            default:
-                State = LOWPOWER;
-                break;
-            }    
-        }
+        received_event = EV_NONE;
     }
+
+    void set_rx_config()
+    {
+        radio.SetRxConfig(MODEM_LORA, 13, 0, 7, 1, 8, 24, false, 0, false, false, 0, true, false);
+        radio.Rx(RX_TIMEOUT);
+
+        received_event = EV_NONE;
+    }
+
+    void setup()
+    {
+        radio.Sleep(); //Put the RF module in sleep mode
+    }
+
+private:
+    RadioClass radio;
+
+    RadioEvents_t radio_callbacks = {
+        .TxDone = tx_done,
+        .TxTimeout = tx_timeout,
+        .RxDone = rx_done,
+        .RxTimeout = rx_timeout,
+        .RxError = rx_error
+    };
 };
 
-
-void OnTxDone(void *radio, void *userThisPtr, void *userData)
-{
-    Radio->Sleep( );
-    State = TX;
-    if (DEBUG_MESSAGE)
-        printf("> OnTxDone\n");
-}
-
-void OnRxDone(void *radio, void *userThisPtr, void *userData, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr)
-{
-    Radio->Sleep( );
-    BufferSize = size;
-    memcpy( RxBuffer, payload, BufferSize );
-    State = RX;
-    if (DEBUG_MESSAGE)
-        printf("> OnRxDone: RssiValue=%d dBm, SnrValue=%d \n", rssi, snr);
-    printf("%s\n\n", payload);
-}
-
-void OnTxTimeout(void *radio, void *userThisPtr, void *userData)
-{
-    *led3 = 0;
-    Radio->Sleep( );
-    State = TX_TIMEOUT;
-    if(DEBUG_MESSAGE)
-        printf("> OnTxTimeout\n");
-}
-
-void OnRxTimeout(void *radio, void *userThisPtr, void *userData)
-{
-    *led3 = 0;
-    Radio->Sleep( );
-    RxBuffer[BufferSize-1] = 0;
-    State = RX_TIMEOUT;
-    if (DEBUG_MESSAGE)
-        printf("> OnRxTimeout\n");
-}
-
-void OnRxError(void *radio, void *userThisPtr, void *userData)
-{
-    Radio->Sleep( );
-    State = RX_ERROR;
-    if (DEBUG_MESSAGE)
-        printf("> OnRxError\n");
-}
-
-#endif
 #endif
